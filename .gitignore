@@ -1,0 +1,18 @@
+# Build artifacts — never commit
+python_embeded/
+venv/
+models/
+
+# ComfyUI is a git clone (has its own .git); re-clone per README
+ComfyUI/
+
+# Generated images / runtime state
+output/
+ComfyUI/user/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
