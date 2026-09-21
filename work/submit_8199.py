@@ -23,7 +23,11 @@ def call(path, data=None):
 def main():
     wf = sys.argv[1]
     timeout = int(sys.argv[2]) if len(sys.argv) > 2 else 3600
-    payload = json.load(open(wf, encoding="utf-8"))
+    graph = json.load(open(wf, encoding="utf-8"))
+    # POST /prompt wants {"prompt": <the graph>}. Sending the bare graph does NOT
+    # work on ComfyUI 0.37.0 -- server.py reads json_data["prompt"] and returns
+    # 400 "no_prompt" if the key is absent.
+    payload = {"prompt": graph, "client_id": "submit_8199"}
     print("submitting", wf, flush=True)
     t0 = time.time()
     try:

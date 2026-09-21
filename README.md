@@ -121,16 +121,98 @@ start_comfyui.bat
 
 Serves on **port 8199**, not the default 8188 — change it in the batch file if 8188 is free.
 
-Submit [`work/workflow_api.json`](work/workflow_api.json) to `/prompt`:
+Submit [`work/workflow_api.json`](work/workflow_api.json) through the helper:
 
 ```bash
-curl -X POST http://127.0.0.1:8199/prompt \
-  -H "Content-Type: application/json" \
-  -d "{\"prompt\": $(cat work/workflow_api.json)}"
+python_embeded/python.exe work/submit_8199.py work/workflow_api.json
 ```
+
+`submit_8199.py` wraps the graph as `{"prompt": <graph>}`. That wrapper is
+required by ComfyUI 0.37: submitting the bare graph returns HTTP 400
+`no_prompt`. The helper was exercised by all five Qwen edit tests below.
 
 This matches the official template (`image_qwen_image_2_1_t2i`): steps 25, cfg 1,
 euler/simple, negative prompt empty.
+
+### Multi-reference edit
+
+2.1's headline feature: up to **10 reference images** in one pass, no separate
+edit model. `TextEncodeQwenImage21` feeds the refs to the Qwen3-VL encoder *and*
+splices them into the sequence as VAE latents.
+
+```bash
+python_embeded/Scripts/python work/submit_8199.py work/workflow_api_edit.json
+python_embeded/Scripts/python work/submit_8199.py work/workflow_api_edit_masked.json
+```
+
+| File | What it does |
+|---|---|
+| `work/workflow_api_edit.json` | 10 permanently-connected **optional** reference slots; each defaults to `[no image]` |
+| `work/workflow_api_edit_masked.json` | repaint only a masked region; everything outside is **pixel-exact** |
+
+Both mirror the official `image_qwen_image_2_1_image_edit` template: steps 25,
+cfg 1, euler/simple, and the `QwenImage21Cache` node in front of the sampler.
+
+#### Reference-slot fallback: connect all 10, fill only what you use
+
+`work/optional_load_image.py` supplies **Load Image (Optional / Fallback)**.
+`register_workflows.py` installs it into the active ComfyUI `custom_nodes/`
+directory before registering the workflows; **restart ComfyUI once** if that
+copy changed.
+
+Every one of the 10 reference wires stays connected to the Qwen encoder. Its
+loader defaults to **`[no image]`**, which returns Python `None` — it is not a
+black image, a transparent image, or an empty filename. The native
+`TextEncodeQwenImage21` encoder explicitly executes `if image is None:
+continue`; consequently that slot adds **no Qwen3-VL vision tokens, no VAE
+encode, and no reference latent**. Select/upload an actual image only in the
+slots you want; leave every other slot at `[no image]`.
+
+This exact configuration was run successfully on this instance:
+
+| Test | Result |
+|---|---|
+| 10 connected slots, all `[no image]` | Qwen text-to-image completed in **25.1 s**; 1024² RGBA product-watch output |
+| Only **slot 3** = `viking_wolf_rune_axe.png`, other 9 `[no image]` | completed in **30.1 s**; wolf-head rune axe was retained while the prompt changed its setting to snowy mountains |
+
+So `[no image]` is a real per-slot fallback: it is safe to leave all ten wires
+connected and choose any subset of images. The current canonical API workflow
+has those exact 10 defaults.
+
+**Output size follows the first *actual non-empty* reference image.** If every
+slot is `[no image]`, it is pure text-to-image and uses the graph's
+`custom_size`/empty-latent route. `resolution` is a *pixel-area* budget (0 =
+keep each reference's native size). To change an image-edit output's size,
+change the reference image.
+
+> **Keep effective refs to 2–3.** Official PE-I2I results and community testing
+> agree that detail starts drifting from the **3rd** reference onward, and
+> profile-view hairstyle angles are the first thing to break. Write edge details
+> into the prompt rather than padding the ref list.
+
+For the masked workflow: the `LoadImage` mask is painted in the UI. Submitting
+over the API, put the painted mask on the node as
+`inputs["5"]["mask"] = {"points": [...], "image": "<source>.png"}` — the mask
+travels in the node input, not in a file. Only a hard binary mask is supported
+(no feathering, no automatic background blending). Drag `GrowMask.expand` up
+from its default of 12 if the seam is too visible.
+
+Both UI graphs (multi-reference and masked) are registered by
+`work/register_workflows.py` as `qwenimage_edit` / `qwenimage_edit_masked`.
+
+### Validating workflow changes
+
+```bash
+python_embeded/python.exe work/validate_workflows.py     # needs the server up
+```
+
+Checks every node/input/link against the running server's `/object_info`, then
+cross-checks each UI graph against its API file. Worth running after editing a
+workflow: a misspelt v3 autogrow key (`image_1` instead of `images.image_1`) is
+**silently dropped** by the engine — the run succeeds and quietly ignores the
+reference image. Only a GET against `/object_info` catches that, and
+`/object_info` is also the only place V3 nodes like `TextEncodeQwenImage21`
+appear at all (`nodes.NODE_CLASS_MAPPINGS` does not contain them).
 
 ---
 

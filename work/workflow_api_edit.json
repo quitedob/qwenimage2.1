@@ -1,0 +1,90 @@
+{
+  "2": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "3": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    }
+  },
+  "4": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    }
+  },
+  "5": {
+    "class_type": "TextEncodeQwenImage21",
+    "inputs": {
+      "clip": ["3", 0],
+      "vae": ["4", 0],
+      "prompt": "A cinematic product photograph of a premium mechanical watch on black marble, soft side lighting, no reference image is required.",
+      "negative_prompt": "",
+      "resolution": 1024,
+      "images.image_1": ["6", 0],
+      "images.image_2": ["7", 0],
+      "images.image_3": ["8", 0],
+      "images.image_4": ["9", 0],
+      "images.image_5": ["10", 0],
+      "images.image_6": ["11", 0],
+      "images.image_7": ["12", 0],
+      "images.image_8": ["13", 0],
+      "images.image_9": ["14", 0],
+      "images.image_10": ["15", 0]
+    }
+  },
+  "6": {"class_type": "OptionalLoadImage", "inputs": {"image": "[no image]"}},
+  "7": {"class_type": "OptionalLoadImage", "inputs": {"image": "[no image]"}},
+  "8": {"class_type": "OptionalLoadImage", "inputs": {"image": "[no image]"}},
+  "9": {"class_type": "OptionalLoadImage", "inputs": {"image": "[no image]"}},
+  "10": {"class_type": "OptionalLoadImage", "inputs": {"image": "[no image]"}},
+  "11": {"class_type": "OptionalLoadImage", "inputs": {"image": "[no image]"}},
+  "12": {"class_type": "OptionalLoadImage", "inputs": {"image": "[no image]"}},
+  "13": {"class_type": "OptionalLoadImage", "inputs": {"image": "[no image]"}},
+  "14": {"class_type": "OptionalLoadImage", "inputs": {"image": "[no image]"}},
+  "15": {"class_type": "OptionalLoadImage", "inputs": {"image": "[no image]"}},
+  "19": {
+    "class_type": "QwenImage21Cache",
+    "inputs": {
+      "model": ["2", 0],
+      "device": "auto",
+      "dtype": "default"
+    }
+  },
+  "20": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": ["19", 0],
+      "positive": ["5", 0],
+      "negative": ["5", 1],
+      "latent_image": ["5", 2],
+      "seed": 42,
+      "steps": 25,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1
+    }
+  },
+  "21": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["20", 0],
+      "vae": ["4", 0]
+    }
+  },
+  "22": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": ["21", 0],
+      "filename_prefix": "qwen21_edit_fallback"
+    }
+  }
+}
