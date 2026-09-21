@@ -1,0 +1,53 @@
+{
+  "client_id": "trellis2-local-8199",
+  "prompt": {
+    "load":     {"class_type": "LoadImage", "inputs": {"image": "viking_wolf_rune_axe.png"}},
+    "crop":     {"class_type": "ImageCropToMask", "inputs": {
+        "images": ["load", 0], "masks": ["load", 1],
+        "width": 1024, "height": 1024, "pad_factor": 1.1,
+        "grow_mask": 0, "background": "#000000"}},
+    "clip":     {"class_type": "CLIPVisionLoader", "inputs": {"clip_name": "dino_v3_vit_l.safetensors"}},
+    "cond":     {"class_type": "Trellis2Conditioning", "inputs": {
+        "clip_vision_model": ["clip", 0], "image": ["crop", 0]}},
+
+    "unet":     {"class_type": "UNETLoader", "inputs": {
+        "unet_name": "trellis_2_int8_convrot.safetensors", "weight_dtype": "default"}},
+    "vaeS":     {"class_type": "VAELoader", "inputs": {"vae_name": "trellis_2_shape_vae_bf16.safetensors"}},
+    "empty":    {"class_type": "EmptyTrellis2LatentStructure", "inputs": {"batch_size": 1}},
+
+    "cfgA":     {"class_type": "CFGOverride", "inputs": {
+        "model": ["unet", 0], "cfg": 1.0, "start_percent": 0.667, "end_percent": 1.0}},
+    "rsA":      {"class_type": "RescaleCFG", "inputs": {"model": ["cfgA", 0], "multiplier": 0.7}},
+    "msA":      {"class_type": "ModelSamplingSD3", "inputs": {"model": ["rsA", 0], "shift": 5.0}},
+    "ks1":      {"class_type": "KSampler", "inputs": {
+        "model": ["msA", 0], "positive": ["cond", 0], "negative": ["cond", 1],
+        "latent_image": ["empty", 0], "seed": 56, "steps": 12, "cfg": 7.5,
+        "sampler_name": "euler", "scheduler": "normal", "denoise": 1.0}},
+
+    "strdec":   {"class_type": "VaeDecodeStructureTrellis2", "inputs": {
+        "samples": ["ks1", 0], "vae": ["vaeS", 0], "resolution": "32"}},
+    "stage1":   {"class_type": "Trellis2ShapeStage", "inputs": {
+        "positive": ["cond", 0], "negative": ["cond", 1], "voxel": ["strdec", 0]}},
+
+    "cfgB":     {"class_type": "CFGOverride", "inputs": {
+        "model": ["unet", 0], "cfg": 1.0, "start_percent": 0.769, "end_percent": 1.0}},
+    "rsB":      {"class_type": "RescaleCFG", "inputs": {"model": ["cfgB", 0], "multiplier": 0.5}},
+    "ks2":      {"class_type": "KSampler", "inputs": {
+        "model": ["rsB", 0], "positive": ["stage1", 0], "negative": ["stage1", 1],
+        "latent_image": ["stage1", 2], "seed": 42, "steps": 20, "cfg": 7.5,
+        "sampler_name": "euler", "scheduler": "normal", "denoise": 1.0}},
+
+    "up":       {"class_type": "Trellis2UpsampleStage", "inputs": {
+        "positive": ["stage1", 0], "negative": ["stage1", 1],
+        "shape_latent": ["ks2", 0], "vae": ["vaeS", 0], "target_resolution": 1536}},
+    "ks3":      {"class_type": "KSampler", "inputs": {
+        "model": ["rsB", 0], "positive": ["up", 0], "negative": ["up", 1],
+        "latent_image": ["up", 2], "seed": 42, "steps": 12, "cfg": 7.5,
+        "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
+
+    "meshdec":  {"class_type": "VaeDecodeShapeTrellis", "inputs": {
+        "samples": ["ks3", 0], "vae": ["vaeS", 0]}},
+    "save":     {"class_type": "SaveGLB", "inputs": {
+        "mesh": ["meshdec", 0], "filename_prefix": "3d/trellis2_shape"}}
+  }
+}
